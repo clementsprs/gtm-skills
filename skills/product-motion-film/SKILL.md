@@ -44,6 +44,13 @@ Rule from review: *a film for a brand is built on that brand's live marketing sy
 
 - Reference for the chat: AI assistants' own launch films (for example Claude's "Personal Finance" film, Nov 2026): frameless conversation, big type, product cards floating alone, serif interstitials.
 - A small persistent header keeps both tools recognisable in the chat: assistant mark + wordmark (where the hook's lockup lands) and a "<Product> MCP" connector chip with a green dot.
+## 2b. v6 shape: one continuous conversation (preferred over interstitial title cards)
+
+- **No interstitials, no title cards.** One discussion with the AI shows the capabilities; each new prompt is the transition: the thread scrolls (spring camera on a thread laid out from text-length estimates) and the new message rising in pushes the previous exchange up. In a beat the camera goes prompt → product card → reply.
+- **AI-neutral.** An MCP works with any AI: no assistant logo or serif in the chat; a "<product> MCP" chip + "works with" and the AI icons; neutral sans reply with a product-colour tail; status dots in the product colour; the hook's logo slot ends on all AIs together.
+- **Light ground throughout.** The product's results appear as cards inside the conversation; the brand's dark sky is kept for the end card only.
+- **Mobile sizes.** Prompt ~62 px, status ~44 px, reply ~58 px, cards scaled ~1.2-1.4× (per card, so the tallest still clears the header).
+
 - **Finish the execution in the product before returning to the chat.** The reply starts only once the card is done (counter landed, variables filled, highlight drawn, ticks in). Showing reply and card at once reads as abrupt back-and-forth and viewers lose the workflow. So beat length = typing + tool call + that card's execution time + the reply.
 - **Every tool recognisable at a glance**: full logos with names in the hook (icons alone are not identified by everyone), the product's full logotype in each product card header, the assistant's mark + wordmark in the chat window's title bar.
 - **Show what the AI produces, not template plumbing.** No `{{firstName}}` merge tags: they read as old mail-merge, "not qualitative enough for the AI era". Show one real message written live for one lead, with the phrase drawn from their signal highlighted (a marker sweep) and a one-line angle saying why.
