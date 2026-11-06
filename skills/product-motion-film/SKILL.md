@@ -51,6 +51,10 @@ Rule from review: *a film for a brand is built on that brand's live marketing sy
 - **Light ground throughout.** The product's results appear as cards inside the conversation; the brand's dark sky is kept for the end card only.
 - **Mobile sizes.** Prompt ~62 px, status ~44 px, reply ~58 px, cards scaled ~1.2-1.4× (per card, so the tallest still clears the header).
 
+- **AI replies are message bubbles** (white, left, opposite the user's grey bubble); bare text reads as captions. No AI avatar.
+- **Continuity by reference**: follow-ups point back (them, these, this) with at most one light reaction, never a praise word on every prompt.
+- **Real channel logos** (LinkedIn, Gmail) on product cards; a toggle switching on is its own moment (track fades in, knob squashes, pulse ring, "Active" label) before the run starts; cut any UI that doesn't belong to the action shown.
+- **Short music tracks** (a client's ~25 s groove): extend by repeating whole 4-bar blocks of the full section on bar boundaries (30 ms crossfades), start after the intro so it opens at full energy, keep the real ending on the last frame. Never time-stretch a picked track.
 - **Finish the execution in the product before returning to the chat.** The reply starts only once the card is done (counter landed, variables filled, highlight drawn, ticks in). Showing reply and card at once reads as abrupt back-and-forth and viewers lose the workflow. So beat length = typing + tool call + that card's execution time + the reply.
 - **Every tool recognisable at a glance**: full logos with names in the hook (icons alone are not identified by everyone), the product's full logotype in each product card header, the assistant's mark + wordmark in the chat window's title bar.
 - **Show what the AI produces, not template plumbing.** No `{{firstName}}` merge tags: they read as old mail-merge, "not qualitative enough for the AI era". Show one real message written live for one lead, with the phrase drawn from their signal highlighted (a marker sweep) and a one-line angle saying why.
