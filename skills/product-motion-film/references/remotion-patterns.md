@@ -129,54 +129,94 @@ export const rnd = (i: number, seed: number) => {
 };
 ```
 
-## Timeline: safe pacing constants
+### Springs (the dynamic layer)
 
-Declare the whole timeline at the top of the film, in seconds, derived from the beat starts. Changing one beat start shifts everything inside it.
+Everything that arrives uses a spring with a little overshoot; bumps and punches use a damped kick.
 
 ```ts
-const SWAP = 3.0;                              // hook line A → product line
-const PANEL = 4.6;                             // backdrop panel rises
-const BEAT = 4.7;                              // per beat: 4.5-5 s reads at first watch, 3.2 s does not
-const SC = [5.5, 5.5 + BEAT, 5.5 + 2 * BEAT, 5.5 + 3 * BEAT] as const;
-const SEND = SC.map((a) => a + 1.15);          // prompt typed 0 → 1.1, sent at 1.15
-const TOOL = SC.map((a) => a + 1.4);           // tool-call row appears
-const CARD = SC.map((a) => a + 1.6);           // product card enters
-const REPLY = SC.map((a) => a + 2.2);          // reply streams at ~8 words/s
-const END = SC[3] + BEAT + 1.2;                // finale starts
-export const SECONDS = END + 3.6;              // finale holds ~1.5 s after the URL lands
+import { spring } from 'remotion';
+
+type Cfg = { damping: number; stiffness: number; mass: number };
+export const BOUNCY: Cfg = { damping: 11, stiffness: 160, mass: 0.9 }; // ~12 % overshoot: words, cards, ticks
+export const SNAP: Cfg = { damping: 15, stiffness: 260, mass: 0.7 };   // lands fast: logo slams, toggles
+export const SOFT: Cfg = { damping: 20, stiffness: 120, mass: 1 };     // barely overshoots: big surfaces
+
+// 0 → 1 (with overshoot) from `at` seconds
+export const sp = (t: number, at: number, cfg: Cfg = BOUNCY) =>
+  t < at ? 0 : spring({ frame: (t - at) * FPS, fps: FPS, config: cfg });
+
+// 0 → +1 → settles at 0: bumps on impact, camera punches, squash on landing
+export const kick = (t: number, at: number, dur = 0.5) => {
+  if (t < at || t > at + dur) return 0;
+  const u = (t - at) / dur;
+  return Math.sin(u * Math.PI * 2.2) * Math.exp(-u * 4.2);
+};
+```
+
+Never pass `Infinity` as a time to `interpolate` (it throws): use a large number such as `1e6` for "never".
+
+## Timeline: computed from what each beat needs
+
+Each beat is chat → product executes to the end → back to chat. So beat starts are computed from the typing time, each card's own execution time and the reply length, not from a fixed beat length.
+
+```ts
+const SWAP = 3.5;                         // hook line A → product line
+const PANEL = 5.1;                        // backdrop panel rises
+const TYPE = 1.45;                        // prompt typing
+const EXEC = [2.1, 3.4, 2.3, 4.0];        // how long each product card needs to finish (count-up, fills, ticks…)
+const REPLY_WORDS = [12, 9, 9, 9];
+const WPS = 9;                            // reply stream, words per second
+const SC: number[] = [], SEND: number[] = [], TOOL: number[] = [], CARD: number[] = [], REPLY: number[] = [];
+{
+  let a = PANEL + 0.9;
+  for (let i = 0; i < EXEC.length; i++) {
+    SC.push(a);
+    SEND.push(a + TYPE);
+    TOOL.push(a + TYPE + 0.25);
+    CARD.push(a + TYPE + 0.45);
+    REPLY.push(a + TYPE + 0.45 + EXEC[i]);    // the reply waits for the card to finish
+    a = REPLY[i] + REPLY_WORDS[i] / WPS + 0.9; // ~0.9 s to read the reply before the next prompt
+  }
+}
+const END = REPLY[REPLY.length - 1] + REPLY_WORDS[REPLY_WORDS.length - 1] / WPS + 1.1;
+export const SECONDS = Math.ceil((END + 3.6) * 10) / 10; // finale holds ~1.5 s after the URL lands
 export const FILM_FRAMES = Math.round(SECONDS * FPS);
 ```
 
-Card details (a counter, a variable filling in, a highlight, ticks) run from `CARD + 1.1` to `CARD + 2.9`.
+Four beats come out around 37 s. If that is too long, drop a beat; don't shorten holds.
 
-## Word: arrives soft, settles sharp
+## Word: springs in, pushes its neighbours, gets thrown out
 
-Blur only small type, and only while it moves. Stagger words 0.06-0.1 s.
+No blur. `push` (an estimated max width in px) makes the word take its width as it lands, so earlier words slide aside and the line re-centres live. `out` throws it up and away.
 
 ```tsx
-export const Word: React.FC<{ t: number; at: number; ink: string; children: React.ReactNode }> = ({ t, at, ink, children }) => {
-  const p = tw(t, at, 0.7);
+export const Word: React.FC<{ t: number; at: number; ink: string; push?: number; out?: number; children: React.ReactNode }> = ({ t, at, ink, push, out = 1e6, children }) => {
+  const p = sp(t, at, BOUNCY);
+  const o = tw(t, out, 0.45, Easing.bezier(0.5, 0, 0.9, 0.4)); // accelerating exit
+  const f = Math.min(1, tw(t, at, 0.18)) * (1 - o);
+  const grow = push ? { maxWidth: Math.min(1, sp(t, at - 0.04, SNAP)) * push } : {};
   return (
     <span style={{
-      display: 'inline-block', color: ink, opacity: p,
-      transform: `translateY(${(1 - p) * 16}px)`,
-      filter: p < 1 ? `blur(${(1 - p) * 5}px)` : undefined,
+      display: 'inline-flex', justifyContent: 'center', whiteSpace: 'nowrap', color: ink, opacity: f,
+      transform: `translateY(${(1 - p) * 60 - o * 90}px) scale(${mix(0.55, 1, p)}) rotate(${(1 - p) * 7 - o * 5}deg)`,
+      transformOrigin: '50% 100%', ...grow,
     }}>{children}</span>
   );
 };
 
-// a two-line claim: ink line then grey line
-const Claim: React.FC<{ t: number; at: number; a: string; b: string }> = ({ t, at, a, b }) => {
-  const words = (s: string, from: number, ink: string) =>
-    s.split(' ').map((w, k) => <Word key={k} t={t} at={from + k * 0.08} ink={ink}>{w}&nbsp;</Word>);
-  const aCount = a.split(' ').length;
-  return (
-    <div style={{ textAlign: 'center' }}>
-      <div>{words(a, at, theme.site.ink)}</div>
-      <div>{words(b, at + aCount * 0.08 + 0.1, theme.site.grey)}</div>
-    </div>
-  );
-};
+// a line in a flex row with `gap`: each word arrives 0.07-0.12 s after the previous one
+// {['Your', 'new', 'sales', 'intern,'].map((w, k) => <Word key={k} t={t} at={0.75 + k * 0.11} ink={ink} push={size * 0.62 * w.length} out={SWAP + k * 0.05}>{w}</Word>)}
+```
+
+### Logo slam inside a sentence
+
+```tsx
+const sl = sp(t, slam, SNAP);
+const punch = kick(t, slam + 0.12, 0.55) * 0.035; // apply as scale(1 + punch) on the whole hook layer
+<span style={{ display: 'inline-flex', maxWidth: sp(t, slam - 0.05, SNAP) * 300, opacity: tw(t, slam, 0.08),
+  transform: `scale(${mix(2.2, 1, sl)}) rotate(${(1 - sl) * -8}deg)` }}>
+  <Img src={staticFile('brand/logotype.svg')} style={{ height: size }} />
+</span>
 ```
 
 ## Typed prompt with caret
@@ -271,28 +311,33 @@ const Reply: React.FC<{ t: number; at: number; text: string }> = ({ t, at, text 
 };
 ```
 
-## Card entrance and exit (one card per beat)
+## Card thrown in and out (one card per beat)
 
 ```tsx
 const Slot: React.FC<{ t: number; from: number; to: number; children: React.ReactNode }> = ({ t, from, to, children }) => {
   if (t < from || t > to + 0.6) return null;
-  const inn = tw(t, from, 0.75);
-  const out = tw(t, to, 0.45, INOUT);
+  const inn = sp(t, from, BOUNCY);
+  const out = tw(t, to, 0.45, Easing.bezier(0.5, 0, 0.9, 0.4));
+  const bump = kick(t, from + 0.38, 0.55); // the tool call's packet lands
   return (
     <div style={{
-      position: 'absolute', left: 1036, top: 300, width: 760,
-      opacity: inn * (1 - out),
-      transform: `translateY(${(1 - inn) * 50 - out * 30}px) scale(${mix(0.97, 1, inn)})`,
-      transformOrigin: '50% 0',
+      position: 'absolute', left: 1036 + (1 - inn) * 320 - out * 260, top: 300 + (1 - inn) * 160 - out * 620, width: 760,
+      opacity: Math.min(1, tw(t, from, 0.15)) * (1 - out * out),
+      transform: `scale(${mix(0.82, 1, inn) * (1 + bump * 0.03)}) rotate(${(1 - inn) * 7 - out * 9}deg)`,
+      transformOrigin: '30% 50%',
     }}>{children}</div>
   );
 };
 
-// rows inside the card stagger in, 0.18 s apart
-// const p = tw(t, at + 0.3 + k * 0.18, 0.6);  style={{ opacity: p, transform: `translateY(${(1 - p) * 12}px)` }}
+// inside the card, rows slide in one after another and their tags pop with a twist:
+// const p = sp(t, at + 0.3 + k * 0.15, BOUNCY);  style={{ opacity: Math.min(1, p * 2), transform: `translateX(${(1 - p) * 90}px)` }}
+// const tg = sp(t, at + 0.75 + k * 0.15, BOUNCY); style={{ transform: `scale(${tg}) rotate(${(1 - tg) * 12}deg)` }}
+// bars overshoot:   width = value * sp(t, at, { damping: 10, stiffness: 90, mass: 1 })  (show Math.min(1, g) in the number)
+// a preview flips to the next record: ph = tw(t, sw - 0.22, 0.44, INOUT); rotateX(ph < 0.5 ? ph * 180 : (ph - 1) * 180)
+// a toggle snaps: knob left = 3 + Math.min(1.06, sp(t, at, SNAP)) * 24, knob width + Math.abs(kick(t, at, 0.35)) * 8
 ```
 
-A card is a header (icon + title + one right-side value), 3-4 rows, and an optional footer ("Showing 4 of 1,284 results · View in app"). Count-ups use `Math.round(target * tw(...))` with `fontVariantNumeric: 'tabular-nums'` so digits don't jitter.
+A card is a header (the product's **full logotype** + a hairline divider + the card title + one right-side value), 3-4 rows, and an optional footer ("Showing 4 of 1,284 results · View in app"). Count-ups use `Math.round(target * tw(...))` with `fontVariantNumeric: 'tabular-nums'`, and pulse once (`scale(1 + kick(...) * 0.18)`) when they land. The card stays on screen while the chat replies; it is thrown out when the next card arrives.
 
 ## Packet from chat to card
 
@@ -334,40 +379,76 @@ const Circle: React.FC<{ t: number; at: number; w: number; h: number; color: str
 };
 ```
 
-## Logos that pop in and stay
+## Logo slot: full logos with names, switching
+
+Icons alone are not recognised by everyone: show each tool as icon + wordmark, one at a time in a single slot, ending on the one the film uses. The white chip behind springs between lockup widths. The outgoing logo is gone before the next lands.
 
 ```tsx
-const LOGOS = ['logos/a.svg', 'logos/b.svg', 'logos/c.svg', 'logos/d.svg'];
-const Tiles: React.FC<{ t: number }> = ({ t }) => (
-  <>
-    {LOGOS.map((src, i) => {
-      const at = 0.2 + i * 0.16;
-      const p = tw(t, at, 0.8, SOFTPOP); // scale with a small overshoot
-      const f = tw(t, at, 0.35);         // quick fade so the overshoot is visible
-      return (
-        <div key={src} style={{ position: 'absolute', left: W / 2 + (i - 1.5) * 164 - 64, top: 300, width: 128, height: 128, borderRadius: 28, background: theme.ui.white, boxShadow: `0 0 0 1px ${theme.ui.line}, 0 10px 30px ${theme.ui.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: f, transform: `scale(${p})` }}>
-          <Img src={staticFile(src)} style={{ width: 59, height: 59 }} />
-        </div>
-      );
-    })}
-  </>
-);
-```
+const LOGOS = [ // ar = wordmark aspect ratio from its viewBox
+  { icon: 'logos/a.svg', text: 'logos/a-text.svg', ar: 97 / 24 },
+  { icon: 'logos/b.svg', text: 'logos/b-text.svg', ar: 86 / 24 },
+  { icon: 'logos/c.svg', text: 'logos/c-text.svg', ar: 63 / 24 },
+  { icon: 'logos/a.svg', text: 'logos/a-text.svg', ar: 97 / 24 }, // end on the film's assistant
+];
+const LOGO_AT = [0.2, 0.85, 1.5, 2.15];
+const LG = { y: 330, icon: 84, text: 60, gap: 22 };
+const lockW = (k: number) => LG.icon + LG.gap + LG.text * LOGOS[k].ar;
 
-A nice transition: when the backdrop panel rises, one tile (the assistant's) shrinks and flies onto the mark in the chat window's title bar (`mix` its x, y and size between the two positions with `INOUT`), while the others lift out.
-
-## Camera: one slow push
-
-```tsx
-const Cam: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const t = useT();
-  const k = 1 + 0.035 * tw(t, SC[0], END - SC[0], Easing.bezier(0.45, 0, 0.55, 1))
-              - 0.035 * tw(t, END - 0.3, 0.9, INOUT); // settle back for the finale
-  return <AbsoluteFill style={{ transform: `scale(${k})`, transformOrigin: '50% 52%' }}>{children}</AbsoluteFill>;
+const LogoSlot: React.FC<{ t: number }> = ({ t }) => {
+  let w = lockW(0);
+  for (let k = 1; k < LOGOS.length; k++) w += (lockW(k) - lockW(k - 1)) * sp(t, LOGO_AT[k] - 0.05, SNAP);
+  const chip = sp(t, 0.15, BOUNCY);
+  return (
+    <>
+      <div style={{ position: 'absolute', left: W / 2 - (w + 64) / 2, top: LG.y - 70, width: w + 64, height: 140, borderRadius: 34, background: theme.ui.white, boxShadow: `0 0 0 1px ${theme.ui.line}, 0 16px 40px ${theme.ui.shadow}`, opacity: Math.min(1, chip * 2), transform: `scale(${chip})` }} />
+      {LOGOS.map((L, k) => {
+        const nx = LOGO_AT[k + 1];
+        if (t < LOGO_AT[k] || (nx !== undefined && t > nx + 0.5)) return null;
+        const inn = sp(t, LOGO_AT[k], SNAP);
+        const out = nx === undefined ? 0 : tw(t, nx - 0.16, 0.16, Easing.bezier(0.5, 0, 0.9, 0.4));
+        return (
+          <div key={k} style={{ position: 'absolute', left: W / 2 - lockW(k) / 2, top: LG.y - LG.icon / 2, display: 'flex', alignItems: 'center', gap: LG.gap, opacity: Math.min(1, inn * 2.5) * (1 - out), transform: `translateY(${(1 - inn) * 70 - out * 70}px) scale(${mix(0.6, 1, inn) * (1 - out * 0.3)}) rotate(${(1 - inn) * 8}deg)` }}>
+            <Img src={staticFile(L.icon)} style={{ width: LG.icon, height: LG.icon, transform: `rotate(${(1 - inn) * -90}deg)` }} />
+            <Img src={staticFile(L.text)} style={{ height: LG.text, width: LG.text * L.ar }} />
+          </div>
+        );
+      })}
+    </>
+  );
 };
 ```
 
-Captions and the background ground sit outside `Cam` so they don't drift.
+When the backdrop panel rises, the final lockup flies on an arc (`mix` x, y and a scale toward the title bar's size, plus `Math.sin(k * Math.PI) * -110` on y) into the chat window's title bar, where the same mark + wordmark take over. Start the flight only once the window has landed, or the logo arrives in empty sky.
+
+## Camera: follows the action
+
+Keyframes per beat (composer → product card → chat for the reply), each move a soft spring. Translate + scale around a moving focus point; never switch `transform-origin` mid-film (it jumps).
+
+```tsx
+type Key = { at: number; z: number; x: number; y: number };
+const CAM: Cfg = { damping: 17, stiffness: 70, mass: 1 };
+const KEYS: Key[] = [
+  { at: 0, z: 1, x: 960, y: 540 },
+  ...SC.flatMap((a, i): Key[] => [
+    { at: a - 0.1, z: 1.06, x: CHAT_CX, y: 1040 },        // typing: lean on the composer
+    { at: CARD[i] - 0.1, z: 1.05, x: CARD_CX, y: 560 },   // the product executes
+    { at: REPLY[i] - 0.25, z: 1.05, x: CHAT_CX, y: 820 }, // back to the chat for the reply
+  ]),
+  { at: END - 0.4, z: 1, x: 960, y: 540 },                 // wide for the finale
+];
+const Cam: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const t = useT();
+  let { z, x, y } = KEYS[0];
+  for (let k = 1; k < KEYS.length; k++) {
+    const e = sp(t, KEYS[k].at, CAM);
+    z += (KEYS[k].z - KEYS[k - 1].z) * e; x += (KEYS[k].x - KEYS[k - 1].x) * e; y += (KEYS[k].y - KEYS[k - 1].y) * e;
+  }
+  z *= 1 + [...SEND, ...CARD.map((c) => c + 0.38)].reduce((m, at) => m + kick(t, at, 0.45), 0) * 0.012; // punches
+  return <AbsoluteFill style={{ transform: `translate(${x * (1 - z)}px, ${y * (1 - z)}px) scale(${z})`, transformOrigin: '0 0' }}>{children}</AbsoluteFill>;
+};
+```
+
+Keep zoom at or under ~1.07 and check stills at each key: at that scale, the panel's top edge must stay clear of the captions, which sit outside `Cam` with the ground.
 
 ## Backdrop: gradients only
 
@@ -391,35 +472,47 @@ For the finale, `mix` the panel's x, y, width, height and radius toward full fra
 
 ## Scene transitions
 
-- Hook to beats: the claim lifts out (24 px up + fade, 0.5 s `INOUT`) while the backdrop panel rises from 120 px below.
-- Beat to beat: the caption and the card leave together (30 px lift, 0.45 s); the next caption and card enter 0.05 s later. The chat window stays, which is what makes the film feel continuous.
-- Beats to finale: the chat window drops 40 px and fades in 0.6 s, the panel grows to full frame, the closing line arrives word by word.
+- Hook to beats: the claim's words are thrown up and away; the backdrop panel springs up from ~700 px below (like a phone rising into frame) and the chat window springs in after it; the assistant's lockup flies into the title bar.
+- Beat to beat: the caption's number chip flips (rotateX) and its words spring in while the old ones are thrown out; the old card is thrown up-left as the new one is thrown in. The chat window stays, which is what makes the film feel continuous.
+- Beats to finale: the chat window drops and fades, the panel springs to full frame, the closing line builds word by word with the logo slamming in where the brand name would be.
 
 Avoid hard cuts and whole-frame crossfades: the film is one continuous space.
 
 ## Sound
 
 ```tsx
+const BED_IN = 8.9; // seconds into the track: its own ending lands on the end card
+const Sfx: React.FC<{ at: number; src: string; v: number }> = ({ at, src, v }) => (
+  <Sequence from={Math.max(0, Math.round(at * FPS))} durationInFrames={Math.round(1.5 * FPS)}>
+    <Audio src={staticFile(`audio/${src}`)} volume={v} />
+  </Sequence>
+);
 const Sound: React.FC = () => {
-  const vol = (fr: number) => interpolate(fr / FPS, [0, 0.5, SECONDS - 2, SECONDS - 0.15], [0, 0.75, 0.75, 0], clamp);
-  const at = (sec: number, file: string, v: number, dur = 1) => (
-    <Sequence key={`${file}${sec}`} from={Math.round(sec * FPS)} durationInFrames={Math.round(dur * FPS)}>
-      <Audio src={staticFile(`audio/${file}`)} volume={v} />
-    </Sequence>
-  );
+  const vol = (fr: number) => interpolate(fr / FPS, [0, 0.25, SECONDS - 0.6, SECONDS - 0.05], [0, 0.8, 0.8, 0], clamp);
   return (
     <>
-      <Audio src={staticFile('audio/bed.mp3')} volume={vol} />
-      {SEND.map((s) => at(s, 'click.mp3', 0.28))}
-      {[0.2, 0.36, 0.52, 0.68].map((s) => at(s, 'pop.mp3', 0.12))}
-      {[PANEL - 0.1, END - 0.1].map((s) => at(s, 'whoosh.mp3', 0.13))}
-      {at(PAYOFF, 'chime.mp3', 0.18, 3)}
+      <Audio src={staticFile('audio/bed.mp3')} startFrom={Math.round(BED_IN * FPS)} volume={vol} />
+      {LOGO_AT.map((a) => <Sfx key={`l${a}`} at={a} src="pop.mp3" v={0.14} />)}
+      {SEND.map((a) => <Sfx key={`c${a}`} at={a} src="click.mp3" v={0.3} />)}
+      {CARD.map((a) => <Sfx key={`k${a}`} at={a + 0.3} src="pop.mp3" v={0.12} />)}
+      {[SWAP + 0.3, PANEL - 0.05, END - 0.2].map((a) => <Sfx key={`w${a}`} at={a} src="whoosh.mp3" v={0.14} />)}
+      <Sfx at={PAYOFF} src="chime.mp3" v={0.18} />
     </>
   );
 };
 ```
 
-Use a licensed track or one you generated with a music model, and SFX from a licensed library or generated. Keep effect volumes low: they accent, they don't announce.
+A music prompt that gave the right energy (any text-to-music model; ask for ~10 s more than the film so you can offset it):
+
+> Instrumental, no vocals. Energetic, playful modern tech launch track at 128 bpm that is at FULL ENERGY FROM THE VERY FIRST SECOND: punchy kick and crisp claps, snappy 16th hi-hats, bouncy plucked synth bass and a bright catchy synth-pluck hook all start immediately on beat one, no slow intro, no ambient build-up, no quiet section. Glassy mallet counter-melody, short punchy synth-brass stabs on accents, quick snare fills and white-noise sweeps every 4 bars to keep it moving. Constant drive and momentum for the whole track, confident and fun like a product launch reel. Ends with a big final hit and a short ring-out. Not house, not EDM drop, not lounge, not lo-fi, no elevator music.
+
+Check it before building on it: loudness per second (a long quiet stretch means regenerate, models often ignore a prompted structure):
+
+```bash
+ffmpeg -v error -i bed.mp3 -ac 1 -ar 8000 -f s16le - | python3 -c "import sys,array,math;a=array.array('h');a.frombytes(sys.stdin.buffer.read());x=[v/32768 for v in a];print(' '.join(f'{k}:{20*math.log10(math.sqrt(sum(v*v for v in x[k*8000:(k+1)*8000])/8000)+1e-9):.0f}' for k in range(len(x)//8000)))"
+```
+
+Use a licensed track or one you generated, and SFX from a licensed library or generated. Every effect needs a visible cause on screen.
 
 ## Gotchas
 

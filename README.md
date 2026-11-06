@@ -12,7 +12,7 @@ actually sent. Every rule in them started as a correction made while reviewing t
 | Skill | What it does |
 |---|---|
 | [`ai-video-director`](skills/ai-video-director) | AI video that looks filmed, not generated: storyboard gate, locked faces, timed-beat prompts, physics and eyeline rules, native dialogue, review, edit and platform masters |
-| [`product-motion-film`](skills/product-motion-film) | Premium on-brand product motion film (Remotion, 20-30s, no voice-over): read the brand from the live site, conversation-then-execution story, readable pace, 4K render |
+| [`product-motion-film`](skills/product-motion-film) | Premium on-brand, dynamic product motion film (Remotion, 30-40s, no voice-over): read the brand from the live site, chat → product → chat beats, spring motion and a follow camera, readable holds, energetic music, 4K render |
 
 ## Install
 
