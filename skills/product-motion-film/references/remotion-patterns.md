@@ -339,6 +339,40 @@ const Slot: React.FC<{ t: number; from: number; to: number; children: React.Reac
 
 A card is a header (the product's **full logotype** + a hairline divider + the card title + one right-side value), 3-4 rows, and an optional footer ("Showing 4 of 1,284 results · View in app"). Count-ups use `Math.round(target * tw(...))` with `fontVariantNumeric: 'tabular-nums'`, and pulse once (`scale(1 + kick(...) * 0.18)`) when they land. The card stays on screen while the chat replies; it is thrown out when the next card arrives.
 
+## Interstitial title (instead of a caption bar)
+
+Full frame, above everything. The ground opens as a circle over the scene, the number chip pops, the title builds word by word, and the whole card lifts away like a curtain while the scene underneath springs forward (multiply the camera zoom by `1 - 0.06 * back`, where `back` rises with the interstitial and springs back as it leaves).
+
+```tsx
+const inn = tw(t, is, 0.42, INOUT);
+const out = tw(t, is + INT - 0.4, 0.4, Easing.bezier(0.6, 0, 0.9, 0.5));
+<AbsoluteFill style={{ zIndex: 45, clipPath: `circle(${inn * 120}% at 50% 55%)`, transform: `translateY(${-out * H}px)` }}>
+  <Ground />
+  {/* number chip: sp(t, is + 0.12, BOUNCY) scale + a small spin; title: <Word push …> at is + 0.22 + k * 0.08, ~110 px */}
+</AbsoluteFill>
+```
+
+Let the next view start ~0.3 s before the curtain finishes (`INT_LEAD ≈ INT - 0.3`), so the cut never stops.
+
+## Frameless chat (one view at a time)
+
+No app window. A small header (assistant mark + wordmark, plus a "<Product> MCP" chip with a green dot) keeps it recognisable.
+
+```tsx
+// user bubble: types itself centred, then springs to the right column edge and shrinks a little
+const k = sp(t, SEND, { damping: 16, stiffness: 140, mass: 1 });
+const estW = Math.min(1180, prompt.length * fs * 0.5 + 84);          // good enough to place a centred bubble
+const shift = (COL_RIGHT - (W / 2 + estW / 2)) * k;
+<div style={{ position: 'absolute', left: 0, right: 0, top: mix(430, 190, k), display: 'flex', justifyContent: 'center', transform: `translateX(${shift}px)` }}>
+  <div style={{ maxWidth: 1180, padding: '24px 42px', borderRadius: 44, fontSize: fs, transform: `scale(${mix(1, 0.8, k)})`, transformOrigin: '100% 0%' }}>{typed}</div>
+</div>
+// status line: three dots bouncing in the assistant's colour + "Searching <product>…" + the real tool name in mono; ticks to done
+// reply: ~54 px serif; each word fades in, and words still arriving are tinted the assistant's accent (a warm tail)
+// color: o < 0.995 ? theme.assistant.accent : theme.assistant.ink
+```
+
+The product's turn is a separate view: its signature backdrop rises over the chat (spring from below), one big centred card plays out, then the backdrop drops away and the chat shows the reply.
+
 ## AI-written message (instead of merge tags)
 
 Words appear at ~16 words/s with a caret; the phrase drawn from the lead's signal gets a marker sweep once written, then a one-line angle pops under it.
