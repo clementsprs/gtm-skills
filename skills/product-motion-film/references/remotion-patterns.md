@@ -155,35 +155,137 @@ export const kick = (t: number, at: number, dur = 0.5) => {
 
 Never pass `Infinity` as a time to `interpolate` (it throws): use a large number such as `1e6` for "never".
 
-## Timeline: computed from what each beat needs
+## Timeline: one conversation, computed from what each step needs
 
-Each beat is chat → product executes to the end → back to chat. So beat starts are computed from the typing time, each card's own execution time and the reply length, not from a fixed beat length.
+Each step is: the prompt rises in and types → sent → status line → the product card plays out inside the thread → the reply. Starts are computed from typing time, each card's own execution time and the reply length.
 
 ```ts
 const SWAP = 3.5;                         // hook line A → product line
-const PANEL = 5.1;                        // backdrop panel rises
-const TYPE = 1.45;                        // prompt typing
-const EXEC = [2.1, 3.4, 2.3, 4.0];        // how long each product card needs to finish (count-up, fills, ticks…)
-const REPLY_WORDS = [12, 9, 9, 9];
+const HOOK_OUT = 5.0;                     // the hook leaves, the conversation starts
+const TYPE = [1.8, 1.9, 1.2, 1.05];       // prompt typing, by prompt length
+const STATUS = 0.9;                       // "Searching <product>…" before the card
+const EXEC = [2.1, 4.4, 2.3, 3.4];        // how long each card needs to finish (count-up, writing, branches, ticks)
+const REPLY_WORDS = [12, 14, 9, 9];
 const WPS = 9;                            // reply stream, words per second
-const SC: number[] = [], SEND: number[] = [], TOOL: number[] = [], CARD: number[] = [], REPLY: number[] = [];
+const HOLD = 1.0;                         // read the reply before the next prompt
+const SC: number[] = [], SEND: number[] = [], PIN: number[] = [], CARD: number[] = [], REPLY: number[] = [];
 {
-  let a = PANEL + 0.9;
+  let c = HOOK_OUT + 0.35;
   for (let i = 0; i < EXEC.length; i++) {
-    SC.push(a);
-    SEND.push(a + TYPE);
-    TOOL.push(a + TYPE + 0.25);
-    CARD.push(a + TYPE + 0.45);
-    REPLY.push(a + TYPE + 0.45 + EXEC[i]);    // the reply waits for the card to finish
-    a = REPLY[i] + REPLY_WORDS[i] / WPS + 0.9; // ~0.9 s to read the reply before the next prompt
+    SC.push(c);
+    SEND.push(c + TYPE[i]);
+    PIN.push(SEND[i] + STATUS);           // status ticks to done
+    CARD.push(PIN[i] + 0.1);
+    REPLY.push(CARD[i] + EXEC[i] + 0.2);  // the reply waits for the card to finish
+    c = REPLY[i] + REPLY_WORDS[i] / WPS + HOLD;
   }
 }
-const END = REPLY[REPLY.length - 1] + REPLY_WORDS[REPLY_WORDS.length - 1] / WPS + 1.1;
-export const SECONDS = Math.ceil((END + 3.6) * 10) / 10; // finale holds ~1.5 s after the URL lands
-export const FILM_FRAMES = Math.round(SECONDS * FPS);
+const END = REPLY[REPLY.length - 1] + REPLY_WORDS[REPLY_WORDS.length - 1] / WPS + 0.8;
+export const SECONDS = Math.ceil((END + 3.2) * 10) / 10; // finale ~3.2 s
 ```
 
-Four beats come out around 37 s. If that is too long, drop a beat; don't shorten holds.
+Four steps come out around 40 s. If that is too long, drop a step; don't shorten holds.
+
+## Continuous thread: layout and scroll camera
+
+Lay the whole thread out once, in thread coordinates, from text-length estimates; then scroll it with soft springs between focus points. The new prompt rising to the centre is what pushes the previous exchange up: that scroll IS the transition between steps.
+
+```tsx
+const FS = { prompt: 62, status: 44, reply: 58 };                       // mobile-readable sizes
+const lines = (text: string, fs: number, width: number) => Math.max(1, Math.ceil((text.length * fs * 0.53) / width));
+const bubbleH = (i: number) => lines(PROMPTS[i], FS.prompt, 1400 - 96) * FS.prompt * 1.3 + 56;
+const replyH = (i: number) => lines(REPLIES[i], FS.reply, 1480 - 96) * FS.reply * 1.3 + 60;
+const CARD_H = [482, 650, 430, 425];      // unscaled card heights, measured on stills
+const CS = [1.38, 1.22, 1.38, 1.3];       // per-card scale: the tallest still clears the header
+
+const LAY = [];                           // y of each element in the thread
+{
+  let y = 0;
+  for (let i = 0; i < PROMPTS.length; i++) {
+    const bubble = y;
+    const status = bubble + bubbleH(i) * 0.86 + 50;   // the sent bubble shrinks to 0.86
+    const card = status + FS.status * 1.4 + 56;
+    const reply = card + CARD_H[i] * CS[i] + 70;
+    LAY.push({ bubble, status, card, reply });
+    y = reply + replyH(i) + 160;
+  }
+}
+// focus keyframes: [time, thread y placed at the top of the screen]
+const SCROLL: [number, number][] = [];
+SC.forEach((c, i) => {
+  SCROLL.push([c - 0.35, LAY[i].bubble + bubbleH(i) / 2 - 470]);              // new prompt centred
+  SCROLL.push([CARD[i] - 0.15, LAY[i].card + (CARD_H[i] * CS[i]) / 2 - 605]); // card centred, below the header
+  SCROLL.push([REPLY[i] - 0.25, LAY[i].reply + replyH(i) - 760]);            // reply in view
+});
+const SCROLLCFG = { damping: 18, stiffness: 80, mass: 1 };
+const scrollAt = (t: number) => {
+  let y = SCROLL[0][1] - 900, prev = y;   // the thread enters from below
+  for (const [at, v] of SCROLL) { y += (v - prev) * sp(t, at, SCROLLCFG); prev = v; }
+  return y;
+};
+// <AbsoluteFill style={{ transform: `translateY(${-scrollAt(t)}px)` }}> …thread elements at their LAY y… </AbsoluteFill>
+```
+
+Put a fixed header above the thread on a white-to-transparent gradient, so scrolled content slides under it cleanly. For a product that works with any AI (an MCP), the header is the product's chip ("<Product> MCP" + green dot) + "works with" + the AI icons: no assistant branding anywhere in the chat.
+
+## Prompt bubble: rises in, types centred, slides right
+
+```tsx
+const pop = sp(t, SC[i], BOUNCY);
+const k = sp(t, SEND[i], { damping: 16, stiffness: 140, mass: 1 });  // centre → right
+const estW = Math.min(1400, prompt.length * FS.prompt * 0.53 + 96);
+const shift = (COL_RIGHT - (W / 2 + estW / 2)) * k;
+<div style={{ position: 'absolute', left: 0, right: 0, top: LAY[i].bubble, display: 'flex', justifyContent: 'center', transform: `translateX(${shift}px)` }}>
+  <div style={{ maxWidth: 1400, padding: '28px 48px', borderRadius: 52, background: theme.ui.bubble, fontSize: FS.prompt,
+    opacity: Math.min(1, pop * 2), transform: `translateY(${(1 - pop) * 80}px) scale(${mix(0.6, 1, pop) * mix(1, 0.86, k)})`, transformOrigin: '100% 0%' }}>
+    {typed}{typing ? <Caret /> : null}
+  </div>
+</div>
+```
+
+Keep the caret solid (a blinking caret reads as flicker at 60 fps).
+
+## Status line and reply bubble
+
+The status line: three dots bouncing in the product colour + "Searching <product>…" + the real tool name in mono; at `PIN` it ticks to a check and the past tense. The reply is a **message bubble** (white, hairline, soft shadow, left, opposite the grey user bubble); bare text reads as a caption, not as the AI talking. No avatar needed.
+
+```tsx
+const b = sp(t, REPLY[i] - 0.05, BOUNCY);
+<div style={{ maxWidth: 1480, padding: '28px 48px', borderRadius: 48, borderTopLeftRadius: 14, background: theme.ui.white,
+  boxShadow: `inset 0 0 0 1px ${theme.ui.line}, 0 14px 36px ${theme.ui.shadow}`, fontSize: FS.reply,
+  opacity: Math.min(1, b * 2), transform: `translate(${(1 - b) * -60}px, ${(1 - b) * 30}px) scale(${mix(0.7, 1, b)})`, transformOrigin: '0% 0%' }}>
+  {words.map((w, j) => {
+    const o = interpolate((t - REPLY[i]) * WPS - j, [0, 1.4], [0, 1], clamp);
+    return <span key={j} style={{ opacity: Math.min(1, o * 1.6), color: o < 0.995 ? theme.brand.accent : theme.ui.ink }}>{w} </span>;
+  })}
+</div>
+```
+
+## Product card inside the thread
+
+The card sits in the AI's column at its `LAY` y, scaled per card around its centre; it lands with a spring and a small bump when the tool call arrives.
+
+```tsx
+const cin = sp(t, CARD[i], BOUNCY);
+<div style={{ position: 'absolute', left: AI_X + (760 * (CS[i] - 1)) / 2, top: LAY[i].card + (CARD_H[i] * (CS[i] - 1)) / 2, width: 760,
+  opacity: Math.min(1, tw(t, CARD[i], 0.15)),
+  transform: `translate(${(1 - cin) * -160}px, ${(1 - cin) * 180}px) scale(${CS[i] * mix(0.82, 1, cin) * (1 + kick(t, CARD[i] + 0.38, 0.55) * 0.03)}) rotate(${(1 - cin) * 6}deg)` }}>
+  <Card t={t} at={CARD[i]} />
+</div>
+```
+
+A card = the product's full logotype + a hairline divider + the title + one right-side value (or real channel logos), 3-4 rows, optional footer. Count-ups use `Math.round(target * tw(...))` with tabular numbers and pulse once when they land.
+
+## Toggle as its own moment
+
+```tsx
+const TG = at + 0.75;                                   // after the card has landed
+const on = Math.min(1.06, sp(t, TG, SNAP)), squish = kick(t, TG, 0.35), ring = tw(t, TG + 0.05, 0.7), lab = sp(t, TG + 0.15, BOUNCY);
+// track: grey base + brand-colour layer with opacity = clamp(on); whole toggle scale(1 + kick(t, TG, 0.45) * 0.12)
+// pulse ring: inset -2, box-shadow 0 0 0 3px brand line colour, scale(1 + ring * 0.7), opacity 1 - ring
+// knob: left = 3 + min(1, on) * 24 - max(0, squish) * 6, width = 26 + |squish| * 8
+// "Active" label in the brand colour pops beside it; the run log starts ~0.5 s later
+```
 
 ## Word: springs in, pushes its neighbours, gets thrown out
 
@@ -219,159 +321,45 @@ const punch = kick(t, slam + 0.12, 0.55) * 0.035; // apply as scale(1 + punch) o
 </span>
 ```
 
-## Typed prompt with caret
+## Logo slot: full logos with names, switching
+
+Icons alone are not recognised by everyone: show each tool as icon + wordmark, one at a time in a single slot. For a product that works with any AI, end on all the icons together rather than on one assistant. The white chip behind springs between lockup widths. The outgoing logo is gone before the next lands.
 
 ```tsx
-const typed = (t: number, start: number, send: number, text: string) =>
-  text.slice(0, Math.round(text.length * interpolate(t, [start + 0.05, send - 0.1], [0, 1], clamp)));
+const LOGOS = [ // ar = wordmark aspect ratio from its viewBox
+  { icon: 'logos/a.svg', text: 'logos/a-text.svg', ar: 97 / 24 },
+  { icon: 'logos/b.svg', text: 'logos/b-text.svg', ar: 86 / 24 },
+  { icon: 'logos/c.svg', text: 'logos/c-text.svg', ar: 63 / 24 },
+  { icon: 'logos/a.svg', text: 'logos/a-text.svg', ar: 97 / 24 }, // end on the film's assistant
+];
+const LOGO_AT = [0.2, 0.85, 1.5, 2.15];
+const LG = { y: 330, icon: 84, text: 60, gap: 22 };
+const lockW = (k: number) => LG.icon + LG.gap + LG.text * LOGOS[k].ar;
 
-const Composer: React.FC<{ t: number }> = ({ t }) => {
-  let text = '';
-  let typing = false;
-  SC.forEach((a, i) => {
-    if (t >= a && t < SEND[i]) { typing = true; text = typed(t, a, SEND[i], PROMPTS[i]); }
-  });
-  // send button "press": dips just before SEND, springs back after
-  const press = SEND.reduce((m, s) => Math.max(m, tw(t, s - 0.06, 0.06) * (1 - tw(t, s + 0.05, 0.15))), 0);
+const LogoSlot: React.FC<{ t: number }> = ({ t }) => {
+  let w = lockW(0);
+  for (let k = 1; k < LOGOS.length; k++) w += (lockW(k) - lockW(k - 1)) * sp(t, LOGO_AT[k] - 0.05, SNAP);
+  const chip = sp(t, 0.15, BOUNCY);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', color: text ? theme.assistant.ink : theme.assistant.muted }}>
-        {text ? (text.length > 52 ? '…' + text.slice(-51) : text) : 'Ask anything'}
-        {typing ? <span style={{ display: 'inline-block', width: 2, height: '1em', background: theme.assistant.ink, marginLeft: 2, verticalAlign: 'middle' }} /> : null}
-      </span>
-      <span style={{ marginLeft: 'auto', transform: `scale(${1 - press * 0.1})` }}>{/* send button */}</span>
-    </div>
+    <>
+      <div style={{ position: 'absolute', left: W / 2 - (w + 64) / 2, top: LG.y - 70, width: w + 64, height: 140, borderRadius: 34, background: theme.ui.white, boxShadow: `0 0 0 1px ${theme.ui.line}, 0 16px 40px ${theme.ui.shadow}`, opacity: Math.min(1, chip * 2), transform: `scale(${chip})` }} />
+      {LOGOS.map((L, k) => {
+        const nx = LOGO_AT[k + 1];
+        if (t < LOGO_AT[k] || (nx !== undefined && t > nx + 0.5)) return null;
+        const inn = sp(t, LOGO_AT[k], SNAP);
+        const out = nx === undefined ? 0 : tw(t, nx - 0.16, 0.16, Easing.bezier(0.5, 0, 0.9, 0.4));
+        return (
+          <div key={k} style={{ position: 'absolute', left: W / 2 - lockW(k) / 2, top: LG.y - LG.icon / 2, display: 'flex', alignItems: 'center', gap: LG.gap, opacity: Math.min(1, inn * 2.5) * (1 - out), transform: `translateY(${(1 - inn) * 70 - out * 70}px) scale(${mix(0.6, 1, inn) * (1 - out * 0.3)}) rotate(${(1 - inn) * 8}deg)` }}>
+            <Img src={staticFile(L.icon)} style={{ width: LG.icon, height: LG.icon, transform: `rotate(${(1 - inn) * -90}deg)` }} />
+            <Img src={staticFile(L.text)} style={{ height: LG.text, width: LG.text * L.ar }} />
+          </div>
+        );
+      })}
+    </>
   );
 };
 ```
 
-Keep the caret solid (no blink): blinking at 60 fps reads as flicker in a short film.
-
-## Bottom-anchored thread that grows
-
-Each message wraps in a container whose max height grows from 0, so a `justify-content: flex-end` column pushes older messages up smoothly instead of jumping.
-
-```tsx
-const Grow: React.FC<{ t: number; at: number; h: number; align: 'flex-start' | 'flex-end'; children: React.ReactNode }> = ({ t, at, h, align, children }) => {
-  if (t < at) return null;
-  const g = tw(t, at, 0.5, INOUT);       // height
-  const p = tw(t, at + 0.06, 0.5);       // content fade + rise, slightly later
-  return (
-    <div style={{ maxHeight: mix(0, h, g), alignSelf: align, opacity: p, transform: `translateY(${(1 - p) * 10}px)` }}>
-      <div style={{ paddingTop: 22 }}>{children}</div>
-    </div>
-  );
-};
-
-// in the thread: <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', overflow: 'hidden', maskImage: 'linear-gradient(transparent, black 12%)' }}>
-//   {SC.map((_, i) => (<>
-//     <Grow t={t} at={SEND[i]}  h={140} align="flex-end"><UserBubble text={PROMPTS[i]} /></Grow>
-//     <Grow t={t} at={TOOL[i]}  h={80}  align="flex-start"><ToolRow t={t} at={TOOL[i]} name={TOOLS[i]} /></Grow>
-//     <Grow t={t} at={REPLY[i]} h={120} align="flex-start"><Reply t={t} at={REPLY[i]} text={REPLIES[i]} /></Grow>
-//   </>))}
-// </div>
-```
-
-## Tool-call row: shimmer, then tick
-
-```tsx
-const ToolRow: React.FC<{ t: number; at: number; name: string }> = ({ t, at, name }) => {
-  const done = t >= at + 0.5;
-  const sweep = ((t - at) * 1.5) % 1;
-  const shimmer: React.CSSProperties = {
-    backgroundImage: `linear-gradient(90deg, ${theme.assistant.muted} ${sweep * 140 - 30}%, ${theme.assistant.ink} ${sweep * 140 - 10}%, ${theme.assistant.muted} ${sweep * 140 + 10}%)`,
-    WebkitBackgroundClip: 'text', color: 'transparent',
-  };
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderRadius: 14, boxShadow: `inset 0 0 0 1px ${theme.assistant.hair}` }}>
-      <img src={staticFile('brand/icon.svg')} width={24} height={24} />
-      <span style={{ fontFamily: 'Mono', ...(done ? { color: theme.assistant.muted } : shimmer) }}>{name}</span>
-      <span style={{ marginLeft: 'auto', transform: `scale(${done ? tw(t, at + 0.5, 0.35, SOFTPOP) : 1})` }}>
-        {done ? <Tick color={theme.ui.green} /> : <Spinner t={t} />}
-      </span>
-    </div>
-  );
-};
-```
-
-## Streamed reply
-
-```tsx
-const Reply: React.FC<{ t: number; at: number; text: string }> = ({ t, at, text }) => {
-  const shown = (t - at) * 8; // words per second
-  return (
-    <div>
-      {text.split(' ').map((w, i, all) => (
-        <span key={i} style={{ opacity: interpolate(shown - i, [0, 1.2], [0, 1], clamp) }}>
-          {w}{i < all.length - 1 ? ' ' : ''}
-        </span>
-      ))}
-    </div>
-  );
-};
-```
-
-## Card thrown in and out (one card per beat)
-
-```tsx
-const Slot: React.FC<{ t: number; from: number; to: number; children: React.ReactNode }> = ({ t, from, to, children }) => {
-  if (t < from || t > to + 0.6) return null;
-  const inn = sp(t, from, BOUNCY);
-  const out = tw(t, to, 0.45, Easing.bezier(0.5, 0, 0.9, 0.4));
-  const bump = kick(t, from + 0.38, 0.55); // the tool call's packet lands
-  return (
-    <div style={{
-      position: 'absolute', left: 1036 + (1 - inn) * 320 - out * 260, top: 300 + (1 - inn) * 160 - out * 620, width: 760,
-      opacity: Math.min(1, tw(t, from, 0.15)) * (1 - out * out),
-      transform: `scale(${mix(0.82, 1, inn) * (1 + bump * 0.03)}) rotate(${(1 - inn) * 7 - out * 9}deg)`,
-      transformOrigin: '30% 50%',
-    }}>{children}</div>
-  );
-};
-
-// inside the card, rows slide in one after another and their tags pop with a twist:
-// const p = sp(t, at + 0.3 + k * 0.15, BOUNCY);  style={{ opacity: Math.min(1, p * 2), transform: `translateX(${(1 - p) * 90}px)` }}
-// const tg = sp(t, at + 0.75 + k * 0.15, BOUNCY); style={{ transform: `scale(${tg}) rotate(${(1 - tg) * 12}deg)` }}
-// bars overshoot:   width = value * sp(t, at, { damping: 10, stiffness: 90, mass: 1 })  (show Math.min(1, g) in the number)
-// a preview flips to the next record: ph = tw(t, sw - 0.22, 0.44, INOUT); rotateX(ph < 0.5 ? ph * 180 : (ph - 1) * 180)
-// a toggle snaps: knob left = 3 + Math.min(1.06, sp(t, at, SNAP)) * 24, knob width + Math.abs(kick(t, at, 0.35)) * 8
-```
-
-A card is a header (the product's **full logotype** + a hairline divider + the card title + one right-side value), 3-4 rows, and an optional footer ("Showing 4 of 1,284 results · View in app"). Count-ups use `Math.round(target * tw(...))` with `fontVariantNumeric: 'tabular-nums'`, and pulse once (`scale(1 + kick(...) * 0.18)`) when they land. The card stays on screen while the chat replies; it is thrown out when the next card arrives.
-
-## Interstitial title (instead of a caption bar)
-
-Full frame, above everything. The ground opens as a circle over the scene, the number chip pops, the title builds word by word, and the whole card lifts away like a curtain while the scene underneath springs forward (multiply the camera zoom by `1 - 0.06 * back`, where `back` rises with the interstitial and springs back as it leaves).
-
-```tsx
-const inn = tw(t, is, 0.42, INOUT);
-const out = tw(t, is + INT - 0.4, 0.4, Easing.bezier(0.6, 0, 0.9, 0.5));
-<AbsoluteFill style={{ zIndex: 45, clipPath: `circle(${inn * 120}% at 50% 55%)`, transform: `translateY(${-out * H}px)` }}>
-  <Ground />
-  {/* number chip: sp(t, is + 0.12, BOUNCY) scale + a small spin; title: <Word push …> at is + 0.22 + k * 0.08, ~110 px */}
-</AbsoluteFill>
-```
-
-Let the next view start ~0.3 s before the curtain finishes (`INT_LEAD ≈ INT - 0.3`), so the cut never stops.
-
-## Frameless chat (one view at a time)
-
-No app window. A small header (assistant mark + wordmark, plus a "<Product> MCP" chip with a green dot) keeps it recognisable.
-
-```tsx
-// user bubble: types itself centred, then springs to the right column edge and shrinks a little
-const k = sp(t, SEND, { damping: 16, stiffness: 140, mass: 1 });
-const estW = Math.min(1180, prompt.length * fs * 0.5 + 84);          // good enough to place a centred bubble
-const shift = (COL_RIGHT - (W / 2 + estW / 2)) * k;
-<div style={{ position: 'absolute', left: 0, right: 0, top: mix(430, 190, k), display: 'flex', justifyContent: 'center', transform: `translateX(${shift}px)` }}>
-  <div style={{ maxWidth: 1180, padding: '24px 42px', borderRadius: 44, fontSize: fs, transform: `scale(${mix(1, 0.8, k)})`, transformOrigin: '100% 0%' }}>{typed}</div>
-</div>
-// status line: three dots bouncing in the assistant's colour + "Searching <product>…" + the real tool name in mono; ticks to done
-// reply: ~54 px serif; each word fades in, and words still arriving are tinted the assistant's accent (a warm tail)
-// color: o < 0.995 ? theme.assistant.accent : theme.assistant.ink
-```
-
-The product's turn is a separate view: its signature backdrop rises over the chat (spring from below), one big centred card plays out, then the backdrop drops away and the chat shows the reply.
 
 ## AI-written message (instead of merge tags)
 
@@ -425,29 +413,6 @@ const br = tw(t, at, 0.55, INOUT);
 // under each title, a result line slides up once done ("38 new leads matched"), plus a small mono duration on the right
 ```
 
-## Packet from chat to card
-
-A dotted quadratic arc and a small glowing dot that travels along it, right after the tool call starts. It ties "conversation" to "execution".
-
-```tsx
-const Beam: React.FC<{ at: number; from: [number, number]; to: [number, number] }> = ({ at, from, to }) => {
-  const t = useT();
-  if (t < at || t > at + 1.0) return null;
-  const c: [number, number] = [(from[0] + to[0]) / 2 + 20, Math.min(from[1], to[1]) + 100];
-  const u = tw(t, at, 0.5, INOUT);
-  const q = (k: number, i: 0 | 1) => (1 - k) ** 2 * from[i] + 2 * (1 - k) * k * c[i] + k ** 2 * to[i];
-  const fade = 1 - tw(t, at + 0.55, 0.4);
-  return (
-    <AbsoluteFill style={{ opacity: fade }}>
-      <svg width={W} height={H}>
-        <path d={`M${from[0]} ${from[1]} Q${c[0]} ${c[1]} ${to[0]} ${to[1]}`} stroke={theme.fx.trail} strokeWidth={2} fill="none" strokeLinecap="round" strokeDasharray="1 9" />
-      </svg>
-      <div style={{ position: 'absolute', left: q(u, 0) - 9, top: q(u, 1) - 9, width: 18, height: 18, borderRadius: 9, background: theme.ui.white, boxShadow: `0 0 0 5px ${theme.fx.halo}, 0 0 22px ${theme.fx.glow}` }} />
-    </AbsoluteFill>
-  );
-};
-```
-
 ## Hand-drawn highlight (the insight moment)
 
 An SVG path drawn with `pathLength={1}` and an animated dash offset, in the assistant's colour, plus a small badge that pops in 0.35 s later.
@@ -465,78 +430,9 @@ const Circle: React.FC<{ t: number; at: number; w: number; h: number; color: str
 };
 ```
 
-## Logo slot: full logos with names, switching
+## Backdrop: gradients only (end card)
 
-Icons alone are not recognised by everyone: show each tool as icon + wordmark, one at a time in a single slot, ending on the one the film uses. The white chip behind springs between lockup widths. The outgoing logo is gone before the next lands.
-
-```tsx
-const LOGOS = [ // ar = wordmark aspect ratio from its viewBox
-  { icon: 'logos/a.svg', text: 'logos/a-text.svg', ar: 97 / 24 },
-  { icon: 'logos/b.svg', text: 'logos/b-text.svg', ar: 86 / 24 },
-  { icon: 'logos/c.svg', text: 'logos/c-text.svg', ar: 63 / 24 },
-  { icon: 'logos/a.svg', text: 'logos/a-text.svg', ar: 97 / 24 }, // end on the film's assistant
-];
-const LOGO_AT = [0.2, 0.85, 1.5, 2.15];
-const LG = { y: 330, icon: 84, text: 60, gap: 22 };
-const lockW = (k: number) => LG.icon + LG.gap + LG.text * LOGOS[k].ar;
-
-const LogoSlot: React.FC<{ t: number }> = ({ t }) => {
-  let w = lockW(0);
-  for (let k = 1; k < LOGOS.length; k++) w += (lockW(k) - lockW(k - 1)) * sp(t, LOGO_AT[k] - 0.05, SNAP);
-  const chip = sp(t, 0.15, BOUNCY);
-  return (
-    <>
-      <div style={{ position: 'absolute', left: W / 2 - (w + 64) / 2, top: LG.y - 70, width: w + 64, height: 140, borderRadius: 34, background: theme.ui.white, boxShadow: `0 0 0 1px ${theme.ui.line}, 0 16px 40px ${theme.ui.shadow}`, opacity: Math.min(1, chip * 2), transform: `scale(${chip})` }} />
-      {LOGOS.map((L, k) => {
-        const nx = LOGO_AT[k + 1];
-        if (t < LOGO_AT[k] || (nx !== undefined && t > nx + 0.5)) return null;
-        const inn = sp(t, LOGO_AT[k], SNAP);
-        const out = nx === undefined ? 0 : tw(t, nx - 0.16, 0.16, Easing.bezier(0.5, 0, 0.9, 0.4));
-        return (
-          <div key={k} style={{ position: 'absolute', left: W / 2 - lockW(k) / 2, top: LG.y - LG.icon / 2, display: 'flex', alignItems: 'center', gap: LG.gap, opacity: Math.min(1, inn * 2.5) * (1 - out), transform: `translateY(${(1 - inn) * 70 - out * 70}px) scale(${mix(0.6, 1, inn) * (1 - out * 0.3)}) rotate(${(1 - inn) * 8}deg)` }}>
-            <Img src={staticFile(L.icon)} style={{ width: LG.icon, height: LG.icon, transform: `rotate(${(1 - inn) * -90}deg)` }} />
-            <Img src={staticFile(L.text)} style={{ height: LG.text, width: LG.text * L.ar }} />
-          </div>
-        );
-      })}
-    </>
-  );
-};
-```
-
-When the backdrop panel rises, the final lockup flies on an arc (`mix` x, y and a scale toward the title bar's size, plus `Math.sin(k * Math.PI) * -110` on y) into the chat window's title bar, where the same mark + wordmark take over. Start the flight only once the window has landed, or the logo arrives in empty sky.
-
-## Camera: follows the action
-
-Keyframes per beat (composer → product card → chat for the reply), each move a soft spring. Translate + scale around a moving focus point; never switch `transform-origin` mid-film (it jumps).
-
-```tsx
-type Key = { at: number; z: number; x: number; y: number };
-const CAM: Cfg = { damping: 17, stiffness: 70, mass: 1 };
-const KEYS: Key[] = [
-  { at: 0, z: 1, x: 960, y: 540 },
-  ...SC.flatMap((a, i): Key[] => [
-    { at: a - 0.1, z: 1.06, x: CHAT_CX, y: 1040 },        // typing: lean on the composer
-    { at: CARD[i] - 0.1, z: 1.05, x: CARD_CX, y: 560 },   // the product executes
-    { at: REPLY[i] - 0.25, z: 1.05, x: CHAT_CX, y: 820 }, // back to the chat for the reply
-  ]),
-  { at: END - 0.4, z: 1, x: 960, y: 540 },                 // wide for the finale
-];
-const Cam: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const t = useT();
-  let { z, x, y } = KEYS[0];
-  for (let k = 1; k < KEYS.length; k++) {
-    const e = sp(t, KEYS[k].at, CAM);
-    z += (KEYS[k].z - KEYS[k - 1].z) * e; x += (KEYS[k].x - KEYS[k - 1].x) * e; y += (KEYS[k].y - KEYS[k - 1].y) * e;
-  }
-  z *= 1 + [...SEND, ...CARD.map((c) => c + 0.38)].reduce((m, at) => m + kick(t, at, 0.45), 0) * 0.012; // punches
-  return <AbsoluteFill style={{ transform: `translate(${x * (1 - z)}px, ${y * (1 - z)}px) scale(${z})`, transformOrigin: '0 0' }}>{children}</AbsoluteFill>;
-};
-```
-
-Keep zoom at or under ~1.07 and check stills at each key: at that scale, the panel's top edge must stay clear of the captions, which sit outside `Cam` with the ground.
-
-## Backdrop: gradients only
+The brand's dark signature backdrop is for the end card only; mid-film, stay on the light ground (a dark panel rising mid-film reads as a jarring cut).
 
 Glows, horizons and skies are layered `radial-gradient`s. Large `box-shadow` blurs (above about 100 px) band in Chrome, and CSS `filter: blur` on big surfaces softens the whole frame.
 
@@ -555,14 +451,6 @@ const Backdrop: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =>
 ```
 
 For the finale, `mix` the panel's x, y, width, height and radius toward full frame with `INOUT` over about 1 s.
-
-## Scene transitions
-
-- Hook to beats: the claim's words are thrown up and away; the backdrop panel springs up from ~700 px below (like a phone rising into frame) and the chat window springs in after it; the assistant's lockup flies into the title bar.
-- Beat to beat: the caption's number chip flips (rotateX) and its words spring in while the old ones are thrown out; the old card is thrown up-left as the new one is thrown in. The chat window stays, which is what makes the film feel continuous.
-- Beats to finale: the chat window drops and fades, the panel springs to full frame, the closing line builds word by word with the logo slamming in where the brand name would be.
-
-Avoid hard cuts and whole-frame crossfades: the film is one continuous space.
 
 ## Sound
 
@@ -592,7 +480,14 @@ A music prompt that gave the right energy (any text-to-music model; ask for ~10 
 
 > Instrumental, no vocals. Energetic, playful modern tech launch track at 128 bpm that is at FULL ENERGY FROM THE VERY FIRST SECOND: punchy kick and crisp claps, snappy 16th hi-hats, bouncy plucked synth bass and a bright catchy synth-pluck hook all start immediately on beat one, no slow intro, no ambient build-up, no quiet section. Glassy mallet counter-melody, short punchy synth-brass stabs on accents, quick snare fills and white-noise sweeps every 4 bars to keep it moving. Constant drive and momentum for the whole track, confident and fun like a product launch reel. Ends with a big final hit and a short ring-out. Not house, not EDM drop, not lounge, not lo-fi, no elevator music.
 
-Check it before building on it: loudness per second (a long quiet stretch means regenerate, models often ignore a prompted structure):
+**A picked track that's too short** (stock grooves are often ~25 s): find the tempo and bar starts from kick onsets, repeat whole 4-bar blocks of the full section on bar boundaries, start after the intro so the film opens at full energy, and keep the real ending on the last frame. Never time-stretch a picked track.
+
+```bash
+ffmpeg -i src.mp3 -filter_complex "[0:a]atrim=0:$b12,asetpts=PTS-STARTPTS[a];[0:a]atrim=$b8:$b12,asetpts=PTS-STARTPTS[b];[0:a]atrim=$b8:$b12,asetpts=PTS-STARTPTS[b2];[0:a]atrim=$b8,asetpts=PTS-STARTPTS[c];[a][b]acrossfade=d=0.03[ab];[ab][b2]acrossfade=d=0.03[abb];[abb][c]acrossfade=d=0.03[o]" -map "[o]" bed-ext.mp3
+# then <Audio startFrom={Math.round(bedIn * FPS)} …/> with bedIn = trackLength - filmLength
+```
+
+Check a generated track before building on it: loudness per second (a long quiet stretch means regenerate, models often ignore a prompted structure):
 
 ```bash
 ffmpeg -v error -i bed.mp3 -ac 1 -ar 8000 -f s16le - | python3 -c "import sys,array,math;a=array.array('h');a.frombytes(sys.stdin.buffer.read());x=[v/32768 for v in a];print(' '.join(f'{k}:{20*math.log10(math.sqrt(sum(v*v for v in x[k*8000:(k+1)*8000])/8000)+1e-9):.0f}' for k in range(len(x)//8000)))"

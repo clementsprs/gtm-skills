@@ -1,129 +1,106 @@
 ---
 name: product-motion-film
-description: Make a premium, on-brand, dynamic product motion film (Remotion, 16:9, 30-40 s, no voice-over) that shows a product working through a short "conversation, then execution" story, for example "an AI assistant drives your product through its API or MCP server". Use when someone asks for a motion video, product film, launch film, feature video, integration demo or AI-assistant demo that must look professional and match a brand precisely (your brand or a partner brand). Covers reading the brand from the live site and app, the story structure, a readable pace, the motion grammar, a sharp 4K render and the review loop. Not for AI-generated footage with people (use the sibling ai-video-director skill) or for slide decks. Triggers on: motion film, product film, launch video, feature video, integration demo video, MCP demo film, Remotion film, animated product demo.
+description: Make a premium, on-brand, dynamic product motion film (Remotion, 16:9, about 40 s, no voice-over) told as ONE continuous conversation with an AI that drives the product, for example "any AI uses your product through its MCP server or API". Use when someone asks for a motion video, product film, launch film, feature video, integration demo, MCP demo or AI-assistant demo that must look professional, match a brand precisely and read on mobile. Covers reading the brand from the live site and app, the conversation structure, the copy, the product cards, the motion grammar, music, a sharp 4K render and the review loop. Not for AI-generated footage with people (use the sibling ai-video-director skill) or for slide decks. Triggers on: motion film, product film, launch video, feature video, integration demo video, MCP demo film, Remotion film, animated product demo.
 ---
 
 # Premium product motion film
 
-A recipe for 30-40 s product films that look like a brand's own launch video: UI-driven, no people, no voice-over, energetic music and a few sound accents. It was built and refined over five review rounds on a real launch film (including the partner brand's own content review); every rule below comes from a note that came back in review.
+A recipe for ~40 s product films that look like a brand's own launch video and feel alive: UI-driven, no people, no voice-over, music and a few sound accents. It was refined over about fifteen review rounds on a real launch film, including the partner brand's own content review; every rule below started as a note that came back in review.
 
-The code side lives in `references/remotion-patterns.md` (project structure, timing helpers, the motion components). The brand-reading procedure is in `references/brand-reading.md`. The brief format is in `references/brief-template.md`.
+Code patterns: `references/remotion-patterns.md`. Brand reading: `references/brand-reading.md`. Brief format: `references/brief-template.md`.
 
 ## Inputs to collect first
 
-1. **The brief**: one row per beat (on-screen copy + what to show). If there is none, write it (step 2 below, template in `references/brief-template.md`) and get it approved before building anything.
-2. **The brand's live surfaces**: the marketing page closest to the topic (for example `yourbrand.com/product/<feature>`) and the product app, both open in a browser.
-3. **Duration target and formats**: 16:9 by default; 1:1 and 4:5 cuts come only after the 16:9 is approved.
-4. **Assets the user brings**: logotype (SVG), icon, any background pattern, partner logos **with their wordmarks** (icon + name), licensed fonts (`woff2`), avatar images for fictional people (generated or licensed), and a licensed or generated music bed plus a few short SFX (click, pop, whoosh, chime). Ask for them; never pull fonts, logos or music you have no licence for.
+1. **The brief**: one row per capability (what the user asks, what the product does, what the AI answers). If there is none, write it (`references/brief-template.md`) and get it approved before building.
+2. **The brand's live surfaces**: the marketing page closest to the topic and the product app, open in a browser.
+3. **Assets the user brings**: logotype (SVG), icon, background pattern, partner and channel logos (real files), licensed `woff2` fonts, avatars for fictional people (generated or licensed), and music: ask whether they have a track they like before generating one.
+4. **Formats**: 16:9 first; 1:1 and 4:5 cuts only after the 16:9 is approved.
 
-If you can't open a browser, say so and ask for screenshots of the page and the app. Never guess a brand's colours or type from memory.
+If you can't open a browser, say so and ask for screenshots. Never guess a brand's colours or type from memory.
 
-## 1. Read the brand from the live site and app (not from memory)
+## 1. Read the brand from the live site and app
 
-Open the page and the app and pull the real values with a small script in the page (`getComputedStyle` on the H1, body text, primary button, a card). The script and the full checklist are in `references/brand-reading.md`. You want:
+Pull the real values with a small script in the page (`getComputedStyle` on the H1, body, primary button, a card; see `references/brand-reading.md`): heading font / weight / tracking, ink and secondary greys, accent, card radius and hairlines, the background treatment, the signature visual (for example a night-sky backdrop), and the logotype SVG. Write every value into one `theme.ts` with where and when it was read; no colour literal anywhere else.
 
-- heading font, weight, letter-spacing, ink colour
-- secondary text colour (site grey and app grey are often different)
-- accent colour and button style, card radius, border or hairline colour
-- the page's **signature visual** (for example a product window in a glass bezel on a night-sky panel, or a gradient horizon) and its **background treatment** (for example a white ground with a faint line pattern and thin frame rules)
-- the logotype file (download the SVG the site serves) and any background pattern asset
+A version built on a generic motion kit was rejected as "not premium, not in brand": build on the brand's own live system.
 
-Write every value into one `theme.ts` with a comment saying where and when it was read. **No colour literal anywhere else in the code.** Third-party UI shown in the film (an AI assistant's chat window, a team-chat app, a CRM) gets its own token group, transcribed from that product's public look.
-
-Rule from review: *a film for a brand is built on that brand's live marketing system, not on a generic motion kit.* A first version built on a generic kit was rejected as "not premium, not in brand".
-
-## 2. Story structure (the shape that works)
-
-**One thing on screen at a time.** A split screen (chat left, product right) was rejected as too much information; titles pinned at the top as static. The v5 shape:
+## 2. Structure: one continuous conversation
 
 | Part | Length | Content |
 |---|---|---|
-| Hook | ~5 s | Full AI logos with names switching in one slot (ending on the assistant the film uses); a short two-line claim; the product logotype slams in ("<Product> makes it work.") |
-| Per beat ×4 | ~8-11 s | **Interstitial** (full-frame kinetic title: number chip + title, ~1.35 s, white ground opens as a circle, lifts away like a curtain) → **chat alone** (frameless, Claude-film style: the user bubble types itself big mid-screen then springs right; status line with pulsing dots + the real tool name) → **product alone** (the brand's sky panel rises over the chat with ONE big centred card that plays out fully) → **chat alone** (the reply streams in big serif with an accent tail) |
-| Finale | ~3.2 s | The sky rises full frame; "The full power of [logo], now in your AI."; plain URL |
+| Hook | ~5 s | The AIs it works with as **full logos with names**, switching in one chip and ending on all their icons together; a short two-line claim (ink + grey); the product logotype slams in ("<Product> makes it work.") |
+| Conversation ×4 | ~7-10 s each | The prompt rises in and types itself big in the middle → sent, slides right → status line ("Searching <product>…" + the real tool name, dots → ✓) → **the product card appears inside the thread and plays out completely** → the AI's reply streams in a message bubble |
+| Finale | ~3.2 s | The brand's dark backdrop rises full frame (the only dark moment); "The full power of [logo], now in your AI."; plain URL |
 
-- Reference for the chat: AI assistants' own launch films (for example Claude's "Personal Finance" film, Nov 2026): frameless conversation, big type, product cards floating alone, serif interstitials.
-- A small persistent header keeps both tools recognisable in the chat: assistant mark + wordmark (where the hook's lockup lands) and a "<Product> MCP" connector chip with a green dot.
-## 2b. v6 shape: one continuous conversation (preferred over interstitial title cards)
+- **No interstitials, no title cards, no captions at the top.** One discussion shows the capabilities. **Each new prompt is the transition**: the thread scrolls, and the new message rising in pushes the previous exchange up. Inside a step the camera goes prompt → product card → reply.
+- **One thing in focus at a time.** No split screen with the chat on one side and the product on the other ("too much info on the screen").
+- **Light ground throughout.** The product's results live in the conversation as cards; a dark panel rising mid-film felt like a jarring cut. Dark is for the end card.
+- **AI-neutral when the product works with any AI** (an MCP server, a public API): no single assistant's logo, typeface or colour in the chat. Header = a "<Product> MCP" chip + "works with" + the AI icons; replies in the product's body font with a product-colour tail on the words still arriving.
+- **The AI talks in message bubbles** (white, left, opposite the user's grey bubble). Bare reply text reads as a caption, "not part of the conversation". No avatar needed.
+- **Finish the execution before the reply**: the reply starts only when the card is done. Step length = typing + status + the card's own execution time + the reply.
+- **Mobile sizes**: prompt ~62 px, status ~44 px, reply ~58 px on a 1920 × 1080 canvas; product cards scaled ~1.2-1.4× (per card, so the tallest still clears the header).
 
-- **No interstitials, no title cards.** One discussion with the AI shows the capabilities; each new prompt is the transition: the thread scrolls (spring camera on a thread laid out from text-length estimates) and the new message rising in pushes the previous exchange up. In a beat the camera goes prompt → product card → reply.
-- **AI-neutral.** An MCP works with any AI: no assistant logo or serif in the chat; a "<product> MCP" chip + "works with" and the AI icons; neutral sans reply with a product-colour tail; status dots in the product colour; the hook's logo slot ends on all AIs together.
-- **Light ground throughout.** The product's results appear as cards inside the conversation; the brand's dark sky is kept for the end card only.
-- **Mobile sizes.** Prompt ~62 px, status ~44 px, reply ~58 px, cards scaled ~1.2-1.4× (per card, so the tallest still clears the header).
+## 3. Copy
 
-- **AI replies are message bubbles** (white, left, opposite the user's grey bubble); bare text reads as captions. No AI avatar.
-- **Continuity by reference**: follow-ups point back (them, these, this) with at most one light reaction, never a praise word on every prompt.
-- **Real channel logos** (LinkedIn, Gmail) on product cards; a toggle switching on is its own moment (track fades in, knob squashes, pulse ring, "Active" label) before the run starts; cut any UI that doesn't belong to the action shown.
-- **Short music tracks** (a client's ~25 s groove): extend by repeating whole 4-bar blocks of the full section on bar boundaries (30 ms crossfades), start after the intro so it opens at full energy, keep the real ending on the last frame. Never time-stretch a picked track.
-- **Finish the execution in the product before returning to the chat.** The reply starts only once the card is done (counter landed, variables filled, highlight drawn, ticks in). Showing reply and card at once reads as abrupt back-and-forth and viewers lose the workflow. So beat length = typing + tool call + that card's execution time + the reply.
-- **Every tool recognisable at a glance**: full logos with names in the hook (icons alone are not identified by everyone), the product's full logotype in each product card header, the assistant's mark + wordmark in the chat window's title bar.
-- **Show what the AI produces, not template plumbing.** No `{{firstName}}` merge tags: they read as old mail-merge, "not qualitative enough for the AI era". Show one real message written live for one lead, with the phrase drawn from their signal highlighted (a marker sweep) and a one-line angle saying why.
-- **Campaigns are flows with conditional branches**, not a row of day icons: first step with its actual words (for example a LinkedIn message) → "Wait 3 days" → branch chips ("Not opened" → email, "Opened, no reply" → LinkedIn voice message with a waveform). The card grows downward step by step as the flow draws, so there is never an empty block.
-- **Status lists look like a modern run log**: a thin rail that fills, status dots (pending → spinning ring → filled with a check in the brand colour), one result line under each step ("38 new leads matched"), a small duration. Boxed icon squares with green checks were called "a bit old school".
-- **Keep clear space under the caption at every camera position**: compute the panel's top edge at each camera keyframe (`y·(1−z) + top·z`) and keep it at least ~30 px below the caption's descenders.
-- **Lighter beats premium**: one card per beat with 3-4 rows, one-line replies. Cut features before you cut hold time. An approved version was praised as "very premium, precisely in brand, even if lighter in features and content".
-- **Prompts sound like a real user and carry the value**: specific, natural, and sharing one vocabulary across beats so the film reads as one thread (for example "Which buying intent signals matter most for my ICP? Find me leads matching those signals." → "Prepare a multichannel campaign personalized to each lead's buying intent signal." → "Which buying intent signals perform best?"). Long prompts are fine; the composer shows the tail while typing and the sent bubble wraps.
-- **Few numbers in the copy.** Each number is one more thing to digest: keep prices and figures out of the hook ("Your new sales intern, working 24/7.", not "your $100/month sales intern"); let the numbers live inside the product cards.
-- Show real tool or API names, checked against the product's actual tool list or API reference. Never invent one.
-- Use fictional people and companies, and say in the brief that UI numbers are illustrative. Every claim number must come from the brief or a named source.
-- **No arrow or button on the URL** in the finale: nothing is clickable in a video.
+- **Prompts sound like one person continuing a conversation**: continuity comes from references to what came before ("for them", "these signals", "run this"), with at most one light reaction. Never a praise word on every prompt.
+- **Specific and carrying the value**, with one shared vocabulary across steps (for example "buying intent signals" in every prompt).
+- **Few numbers**: none in the hook (no price); numbers live inside the cards. Claim numbers have a source in the brief; UI numbers are flagged illustrative; people and companies are fictional.
+- **Real tool or API names** on the status line, checked against the product's actual tool list. Never invent one.
+- **Logos replace names**: the logotype inside the closing line; a logotype + word lockup keeps its word space. No arrow or button on a URL: nothing is clickable in a video.
 
-## 3. Pace: readable at first watch, dynamic in motion
+## 4. Product cards: show what the AI actually did
 
-- **Holds stay long; motion gets fast.** 3.2 s beats were rejected as "too fast, we can't read"; the next round asked for "more dynamic". The fix for dynamism is never shorter holds: entrances and exits become snappy springs (0.3-0.6 s) while every line of text holds as long as before.
-- Inside a beat (seconds from beat start): type 0-1.45, send 1.45, tool call 1.7, card 1.9, card execution 2-4 s (set per card), reply streamed at about 9 words/s, then ~0.9 s before the next prompt. Compute the beat starts from these instead of a fixed beat length (`references/remotion-patterns.md`, "Timeline").
-- When the brief's duration and readability conflict, **readability wins**. Say so and offer a cut (drop a beat) rather than speeding up.
+- One card per step, 3-4 rows, the product's full logotype in the header.
+- **Qualitative, AI-era output, not plumbing**: no `{{firstName}}` merge tags ("not qualitative enough for the AI era"). Show a real message written live for one record, the phrase drawn from its data highlighted with a marker sweep, and a one-line angle.
+- **Workflows are flows with conditional branches** (step with its actual words → "Wait 3 days" → "Not opened" → email / "Opened, no reply" → voice message with a live waveform), not a row of day icons. The card grows downward as the flow draws: never an empty block.
+- **Real channel logos** (LinkedIn, Gmail…) make it authentic.
+- **Status lists are modern run logs**: thin rail that fills, dots pending → spinning ring → filled check in the brand colour, a result line per step, a small duration. Boxed icon squares with green checks read "old school".
+- **A state change is its own moment**: a toggle waits for the card to land, then the track fades in, the knob squashes, a pulse ring spreads, an "Active" label pops, and only then does the run start.
+- **Cut UI that doesn't belong to the action shown** (a team-chat recap card on a scheduling step "doesn't make sense").
 
-## 4. Motion grammar: dynamic and physical
+## 5. Motion grammar: dynamic in the elements, readable in the holds
 
-The bar was set by playful launch films where every element has physics (a good public example: Allo's "We decided to give Grok Bot a phone", Oct 2026). Take the element motion, not the mascot: the brief was "not necessarily a mascot, but dynamism in the elements displayed".
+The bar: playful launch films where every element has physics (a public example: Allo's "We decided to give Grok Bot a phone", Oct 2026; no mascot needed) and AI assistants' own launch films (frameless conversation, big type).
 
-- **Springs, not eases**, for everything that arrives: Remotion `spring()` with a little overshoot (presets in `references/remotion-patterns.md`), plus a damped `kick()` for bumps and punches.
-- **Words spring up** from below with a slight tilt (no blur) and **push each other**: each word's width grows from 0 as it lands, so the sentence builds and re-centres live. Old lines are **thrown up and away** word by word, never just faded.
-- **Objects sit inside the sentence**: the logotype slams in big (scale ~2.2 → 1) and the line shakes once on impact; a logo slot springs between widths as brands switch, the old logo gone before the new one lands (no overlap).
-- **Cards are thrown in and out**: in from bottom-right with a ~7° tilt and overshoot, out up-left with a spin; a small bump (+3 %) when the tool call's packet lands. Inside: rows slide in one by one, tags and ticks pop with a twist, bars overshoot their value, toggles snap with a squashy knob, a preview flips (rotateX) from one record to the next.
-- **No split screen, no title bar at the top**: titles are interstitials and the camera stays on the one element on screen (slow push into the card while it executes).
-- **The camera follows the action** with soft springs between keyframes: the composer while typing, the product card while it executes, the payoff (for example a team-chat recap), the chat for the reply, wide for the finale. Max zoom about 1.07, plus small punches on send, card landing, the insight and the payoff. Captions and the ground sit outside the camera.
-- Chat messages pop like messages: the user bubble from bottom-right, assistant rows from the left, inside a bottom-anchored thread.
-- Mark the "insight" moment in the assistant's colour (hand-drawn ellipse + a badge that springs in).
-- No whole-frame crossfades or hard cuts: one continuous space.
+- **Springs, not eases** for everything that arrives (`spring()` with overshoot; presets and a damped `kick()` in the patterns file).
+- **Words spring up** with a slight tilt and **push each other** as a line builds; old lines are thrown away, never just faded. The logotype slams in and the line shakes once.
+- **Thread camera**: lay the thread out from text-length estimates and scroll it with soft springs between focus points (new prompt centred → card centred → reply in view), small punches on send and card landing. The header sits on a white fade so scrolled content slides under it.
+- **Cards land with a spring** (slight tilt, a small bump when the tool call lands); rows slide in, tags and ticks pop, bars overshoot, previews flip.
+- **Holds stay long, motion gets fast**: 3.2 s steps were "too fast, we can't read". Dynamism comes from snappy entrances (0.3-0.6 s), never from shorter holds. Reply at ~9 words/s, ~1 s before the next prompt. When duration and readability conflict, readability wins: offer to drop a step.
+- No hard cuts, no whole-frame crossfades: one continuous space.
 
-## 4b. Music and sound
+## 6. Music and sound
 
-- **Music = feel-good modern pop, not nightclub** (a four-on-the-floor electro-pop bed was rejected as "too nightclub"). Prompt that worked: « Feel-good modern pop instrumental, 118 BPM, sunny, warm and uplifting from the first bar. Bouncy, crisp modern drums with a tight snappy snare and finger snaps, NOT a four-on-the-floor club kick. Warm plucked electric guitar riff, bright marimba and synth-pluck hook, round groovy bass, playful claps, light airy vocal chops, a little whistle-like lead. Modern and fresh like a 2025 tech product launch film: optimistic, confident, smiling. Not nightclub, not EDM, not house, not disco, not 80s or retro, not lo-fi, no elevator music. Steady energy with small lifts every 8 bars, clean polished mix, and a clean hard ending on the last beat. »
-- **Energetic from the first bar**: punchy drums, bouncy bass, a bright pluck hook, fills every 4 bars, ~128 bpm. A calm felt-piano bed was rejected ("the music should be more dynamic"); lounge, house and lo-fi don't fit either. A prompt that worked is in `references/remotion-patterns.md` ("Sound").
-- **Default music prompt** (it set the right energy on the reference film): « Upbeat electro-pop instrumental, 128 BPM, fast build-up into a punchy drop, groovy bouncy synth bass, four-on-the-floor kick, claps, bright synths, risers and impacts, vocal chops, energetic and confident, modern tech product launch, clean polished mix, hard ending ». Request the film's exact length; if the hard stop lands early or late, fit it with a pitch-kept `atempo` of a few percent (v4: 37.3 s stop → 38.8 s with `atempo=0.9613`) instead of fading out.
-- **Rap voiceover variant** (ElevenLabs `eleven_v4`, `[rapping] [confident]` tags, a rapper voice from the library, not one named after a real artist): write one line per section that says what is on screen; generate them as one take with `[long pause]` between sections, split at the pauses (`silencedetect`), regenerate any line that overruns its window rather than speeding it up past ~1.15×, then start each line on a beat of the bed (find the phase from kick onsets) so it ends inside its section. Normalise each line to about -14 LUFS, duck the bed to ~35 % under the voice, and loudnorm the final mix to -14 LUFS. Ship it as a separate composition  next to the instrumental cut.
-- **Check a generated track before using it**: print loudness per second. A first generation ignored its prompted structure and sat flat and quiet for 15 s before the drop; regenerating with "full energy from the very first second, no intro" fixed it.
-- **Offset the bed** so the track's own ending lands on the end card, and look for a break that can fall on a section change.
-- SFX only with a visible cause: pops on logo switches and card landings, clicks on sends, whooshes on the big moves (logo slam, panel rise, finale), one chime on the payoff.
+- **Feel-good, bouncy, modern**: ~115-122 bpm, crisp snappy drums without a club kick, bouncy bass, plucks / guitar / marimba, claps and snaps. Rejected in review: a calm piano bed ("more dynamic"), four-on-the-floor electro-pop ("too nightclub"), anything retro ("not old school").
+- **A picked track that's too short** (stock grooves are often ~25 s): repeat whole 4-bar blocks of its full section on bar boundaries, start it after its intro so the film opens at full energy, keep its real ending on the last frame. Never time-stretch a picked track. Recipe in the patterns file ("Sound").
+- **Generating one**: request the film's exact length and check loudness per second before building on it; models ignore prompted structure (one take sat quiet for 15 s before its drop). A prompt that worked is in the patterns file.
+- SFX only with a visible cause (pops on logo switches and card landings, clicks on sends, soft whooshes as prompts rise in and on the finale, a chime when the last step ticks). Mix to about -14 LUFS.
 
-## 5. Quality: razor sharp
+## 7. Quality: razor sharp
 
-- Render **supersampled at 2x** and downscale: a 3840x2160 master (CRF 14, JPEG frames at quality 100, x264 slow), then a Lanczos downscale to 1080p (CRF 14) for review. A plain 1080p render with default JPEG frames looks soft; that was the "a bit blurry" note.
-- **No CSS blur on large surfaces**, and no opacity fades on whole windows longer than about 0.35 s (they look washed out over a dark backdrop).
-- **No huge `box-shadow` blurs** (more than about 100 px on big elements): Chrome draws rectangular bands. Use layered `radial-gradient`s for glows and horizons.
-- Fonts are local `woff2` files loaded with `@font-face` and a bounded wait. Never fetch them from a web font service at render time. For a serif "assistant voice", any licensed text serif works.
-- SVG logos with `fill="currentColor"` render black inside `<Img>`; rewrite the fill to a real colour.
+- Master **supersampled 2x** (`--scale=2`, CRF 14, JPEG 100, x264 slow); review rounds can use a straight 1080p render.
+- No CSS blur on large surfaces; no huge `box-shadow` blurs (Chrome bands them, use radial gradients); local `woff2` fonts with a bounded wait; SVGs with `fill="currentColor"` render black inside `<Img>`, rewrite the fill.
+- Picture-only change: render once `--muted`, render each audio mix as WAV and mux. Audio-only change: re-mux onto the existing picture.
 
-## 6. Build steps
+## 8. Build and review loop
 
-1. Scaffold a Remotion project (`npx create-video@latest`, blank template) or reuse one you already have. Structure and scripts are in `references/remotion-patterns.md`.
-2. Fill `theme.ts` with the brand values from step 1, and put the user's assets in `public/` (logotype, icon, pattern, partner logos, avatars, fonts, audio).
-3. Create `src/<Film>.tsx` and register it in `Root.tsx`. Write, in order: the timeline constants (hook swap, panel rise, typing time, per-card execution times, reply lengths; beat starts and duration are computed), the logo list and hook copy, the data arrays `CAPTIONS`, `PROMPTS`, `TOOLS`, `REPLIES`, one card component per beat, then the camera keyframes and the sound offsets.
-4. Check stills at each beat before any full render: `npx remotion still src/index.ts Film out/s.png --frame=<sec x 60> --scale=0.5`. Look for overlaps, text wrapping, elements cut at the panel edge, and the camera push pushing things out of frame.
-5. Render the master + review, pull a 6-frame contact sheet with ffmpeg (`select` + `tile=2x3`), and zoom on one card crop to confirm sharpness.
-6. Send the **1080p review** first. Make the 4K and social cuts only after approval.
+1. Scaffold a Remotion project (structure in the patterns file), fill `theme.ts`, put the user's assets in `public/`.
+2. Write the film in this order: logo list + hook copy, `PROMPTS`, `TOOLS`, `STATUSES`, `REPLIES`, one card component per step with its height and scale, then the timeline constants (starts and duration are computed), then the music offset.
+3. Stills at every step before any full render (`npx remotion still … --frame=<sec × 60> --scale=0.5`), as a contact sheet: overlaps, wrapping, cards under the header, empty blocks, leftover single-assistant branding.
+4. Send the 1080p review first; 4K and social cuts only after approval. Write every correction back into this skill the same day.
 
 ## Done when
 
-- Every caption, prompt, reply and card row can be read on a first watch at normal speed, and nothing arrives or leaves without motion.
-- Each beat finishes in the product before the chat answers, and every tool on screen is identifiable by its logo.
-- Colours, type and the signature visual match the brand's live page side by side.
-- A crop of a card at 1080p shows crisp text, and the backdrop has no banding.
-- The brief notes the source of every claim and flags illustrative UI numbers.
-- Every font, logo, image and audio file in `public/` is owned, licensed or generated, and you can say which.
+- It reads as one conversation with an AI, one thing in focus at a time, every line readable on a phone at first watch.
+- Each step finishes in the product before the AI answers; every product card shows real, qualitative output with real channel logos.
+- Nothing arrives or leaves without motion; nothing dark before the end card.
+- Colours, type and logos match the brand's live page; a 1080p crop is crisp; the music opens at full energy and ends on the last frame.
+- Every font, logo, image and audio file is owned, licensed or generated, and you can say which.
+
+## Rejected in review (don't repeat)
+
+Generic motion kit · 3.2 s steps · calm piano bed · four-on-the-floor club beat · split-screen chat + product · captions pinned at the top · full-frame interstitial title cards · a dark panel mid-film · one assistant's branding in a works-with-any-AI film · merge tags · a row of day icons for a workflow · boxed icons + green checks · bare reply text · an AI avatar · a praise word on every prompt · off-topic UI · a glued logotype + word · a price in the hook · an arrow on a URL.
 
 ## Related
 
-- `ai-video-director`: AI-generated footage with people (actors, street interviews, brand films). Use it when the film needs humans on screen; this skill stays UI-only.
+- `ai-video-director`: AI-generated footage with people. Use it when the film needs humans on screen; this skill stays UI-only.

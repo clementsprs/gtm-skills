@@ -14,7 +14,7 @@ Music: <licensed or generated track, source>
 | # | Part | On-screen copy | What we show | Tool / API name | Claim source |
 |---|------|----------------|--------------|-----------------|--------------|
 | 0 | Hook | "<line A ink> / <line B grey>" then "<Product> makes it work." | Partner logos with names (icon + wordmark) switch in one slot | | |
-| 1 | Beat | "01 <verb + outcome>" | Prompt: "<natural, specific>" → Card (executes fully): <3-4 rows> → Reply: "<one line>" | `<real_tool_name>` | |
+| 1 | Step | (no on-screen title) | Prompt: "<natural, specific>" → status → Card (executes fully): <3-4 rows> → Reply bubble: "<one line>" | `<real_tool_name>` | |
 | 2 | Beat | "02 ..." | ... | ... | |
 | 3 | Beat | "03 ..." | ... (insight moment, highlighted) | ... | <source for the number> |
 | 4 | Beat | "04 ..." | ... (payoff, for example a recap posted in team chat) | ... | |
@@ -27,7 +27,8 @@ Notes:
 
 ## Writing good beat copy
 
-- Captions: number + verb + outcome, 3-4 words ("Find relevant people", "Understand what works best").
+- No captions or title cards: the prompts carry the story.
+- Follow-up prompts continue the conversation by reference ("for them", "these signals", "run this"), with at most one light reaction; never a praise word on every prompt.
 - Prompts: how a real user would type it, specific, with the value in it ("Prepare a multichannel campaign personalized to each lead's buying intent signal"). Reuse the same key words across beats so it reads as one thread.
 - Replies: one line, the result in plain words, ideally with one concrete number.
 - Cards: 3-4 rows, one idea each. If a card needs a fifth row, the beat is doing two things: split or cut.
