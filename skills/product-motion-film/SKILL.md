@@ -91,6 +91,8 @@ The bar: playful launch films where every element has physics (a public example:
 3. Stills at every step before any full render (`npx remotion still … --frame=<sec × 60> --scale=0.5`), as a contact sheet: overlaps, wrapping, cards under the header, empty blocks, leftover single-assistant branding.
 4. Send the 1080p review first; 4K and social cuts only after approval. Write every correction back into this skill the same day.
 
+**Card heights are measured, not guessed**: the thread layout reserves each card's height, and an underestimate makes the next message slide under the card (a recap card reserved at 452 px rendered at ~530 and overlapped). Sum the real parts (header + body padding + rows × row height), then check a still of every card's final state against the item after it before the full render.
+
 ## Done when
 
 - It reads as one conversation with an AI, one thing in focus at a time, every line readable on a phone at first watch.
