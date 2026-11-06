@@ -339,6 +339,58 @@ const Slot: React.FC<{ t: number; from: number; to: number; children: React.Reac
 
 A card is a header (the product's **full logotype** + a hairline divider + the card title + one right-side value), 3-4 rows, and an optional footer ("Showing 4 of 1,284 results · View in app"). Count-ups use `Math.round(target * tw(...))` with `fontVariantNumeric: 'tabular-nums'`, and pulse once (`scale(1 + kick(...) * 0.18)`) when they land. The card stays on screen while the chat replies; it is thrown out when the next card arrives.
 
+## AI-written message (instead of merge tags)
+
+Words appear at ~16 words/s with a caret; the phrase drawn from the lead's signal gets a marker sweep once written, then a one-line angle pops under it.
+
+```tsx
+type Seg = string | { hl: string };
+const msg: Seg[] = ['Priya, ', { hl: 'four SDR hires in one quarter' }, ' is a big bet. Want your new reps booking meetings in their first week?'];
+const words = (m: Seg[]) => m.flatMap((g) => (typeof g === 'string' ? g : g.hl).split(/(?<= )/).map((w) => ({ w, hl: typeof g !== 'string' })));
+
+const Written: React.FC<{ t: number; at: number }> = ({ t, at }) => {
+  const ws = words(msg);
+  const done = at + ws.length / 16;
+  const mark = tw(t, done + 0.05, 0.45, INOUT);
+  return (
+    <div>
+      {ws.map((x, i) => (
+        <span key={i} style={{
+          opacity: interpolate((t - at) * 16 - i, [0, 1], [0, 1], clamp),
+          fontWeight: x.hl ? 600 : 400,
+          backgroundImage: x.hl ? `linear-gradient(${theme.brand.tint}, ${theme.brand.tint})` : undefined,
+          backgroundRepeat: 'no-repeat', backgroundSize: x.hl ? `${mark * 100}% 100%` : undefined,
+        }}>{x.w}</span>
+      ))}
+    </div>
+  );
+};
+```
+
+## Branching flow (multichannel with conditions)
+
+Step node → connector → "Wait 3 days" pill → two SVG branches drawn with `pathLength={1}` → condition chips → two nodes. Wrap everything under the first node in a container whose `maxHeight` springs from 0, so the card grows as the flow draws.
+
+```tsx
+const br = tw(t, at, 0.55, INOUT);
+<svg width={BW} height={78} style={{ overflow: 'visible' }}>
+  {[`M${BW / 2} 0 C ${BW / 2} 40, ${BW * 0.25} 30, ${BW * 0.25} 78`, `M${BW / 2} 0 C ${BW / 2} 40, ${BW * 0.75} 30, ${BW * 0.75} 78`].map((d, k) => (
+    <path key={k} d={d} fill="none" stroke={theme.brand.line} strokeWidth={2} strokeLinecap="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - br} />
+  ))}
+</svg>
+// chips: "Not opened" over the left branch, "Opened, no reply" over the right one, popping with sp(…, BOUNCY)
+// a voice-message node = play dot + ~22 waveform bars whose heights breathe with Math.sin(t * 9 + i * 0.8)
+```
+
+## Run log (modern status list)
+
+```tsx
+// per step k: start = at + 0.6 + k * 0.45, end = start + 0.38
+// dot: hairline circle → spinning ring while running → brand-colour fill with a white check (scale = sp(t, end, BOUNCY))
+// a 2 px rail behind the dots fills from the first to the last dot: height = rowH * (n - 1) * interpolate(t, [start(0), end(n-1)], [0, 1])
+// under each title, a result line slides up once done ("38 new leads matched"), plus a small mono duration on the right
+```
+
 ## Packet from chat to card
 
 A dotted quadratic arc and a small glowing dot that travels along it, right after the tool call starts. It ties "conversation" to "execution".
